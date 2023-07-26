@@ -23,7 +23,7 @@
 </template>
 
 <script lang="ts" setup>
-import { onMounted, watch, shallowRef } from 'vue';
+import { onMounted, watch, shallowRef, onUnmounted } from 'vue';
 import * as misskey from 'misskey-js';
 import PhotoSwipeLightbox from 'photoswipe/lightbox';
 import PhotoSwipe from 'photoswipe';
@@ -44,6 +44,13 @@ const gallery = shallowRef<HTMLDivElement>();
 const pswpZIndex = os.claimZIndex('middle');
 document.documentElement.style.setProperty('--mk-pswp-root-z-index', pswpZIndex.toString());
 const count = $computed(() => props.mediaList.filter(media => previewable(media)).length);
+let lightbox: PhotoSwipeLightbox | null;
+
+const popstateHandler = (): void => {
+	if (lightbox.pswp && lightbox.pswp.isOpen === true) {
+		lightbox.pswp.close();
+	}
+};
 
 function calcAspectRatio() {
 	if (!gallery.value) return;
@@ -77,7 +84,7 @@ function calcAspectRatio() {
 watch([defaultStore.reactiveState.mediaListWithOneImageAppearance, gallery], () => calcAspectRatio());
 
 onMounted(() => {
-	const lightbox = new PhotoSwipeLightbox({
+	lightbox = new PhotoSwipeLightbox({
 		dataSource: props.mediaList
 			.filter(media => {
 				if (media.type === 'image/svg+xml') return true; // svgのwebpublicはpngなのでtrue
@@ -159,12 +166,7 @@ onMounted(() => {
 
 	lightbox.init();
 
-	window.addEventListener('popstate', () => {
-		if (lightbox.pswp && lightbox.pswp.isOpen === true) {
-			lightbox.pswp.close();
-			return;
-		}
-	});
+	window.addEventListener('popstate', popstateHandler);
 
 	lightbox.on('beforeOpen', () => {
 		history.pushState(null, '', '#pswp');
@@ -175,6 +177,12 @@ onMounted(() => {
 			history.back();
 		}
 	});
+});
+
+onUnmounted(() => {
+	window.removeEventListener('popstate', popstateHandler);
+	lightbox?.destroy();
+	lightbox = null;
 });
 
 const previewable = (file: misskey.entities.DriveFile): boolean => {
