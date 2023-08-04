@@ -213,7 +213,7 @@ const translation = ref<any>(null);
 const translating = ref(false);
 const showTicker = (defaultStore.state.instanceTicker === 'always') || (defaultStore.state.instanceTicker === 'remote' && appearNote.user.instance);
 const canRenote = computed(() => ['public', 'home'].includes(appearNote.visibility) || appearNote.userId === $i.id);
-let renoteCollapsed = $ref(defaultStore.state.collapseRenotes && isRenote && (($i && ($i.id === note.userId)) || (appearNote.myReaction != null)));
+let renoteCollapsed = $ref(defaultStore.state.collapseRenotes && isRenote && (($i && ($i.id === note.userId || $i.id === appearNote.userId)) || (appearNote.myReaction != null)));
 
 const keymap = {
 	'r': () => reply(true),
@@ -249,6 +249,17 @@ useTooltip(renoteButton, async (showing) => {
 		targetElement: renoteButton.value,
 	}, {}, 'closed');
 });
+
+type Visibility = 'public' | 'home' | 'followers' | 'specified';
+
+// defaultStore.state.visibilityがstringなためstringも受け付けている
+function smallerVisibility(a: Visibility | string, b: Visibility | string): Visibility {
+	if (a === 'specified' || b === 'specified') return 'specified';
+	if (a === 'followers' || b === 'followers') return 'followers';
+	if (a === 'home' || b === 'home') return 'home';
+	// if (a === 'public' || b === 'public')
+	return 'public';
+}
 
 function renote(viaKeyboard = false) {
 	pleaseLogin();
@@ -300,7 +311,12 @@ function renote(viaKeyboard = false) {
 				os.popup(MkRippleEffect, { x, y }, {}, 'end');
 			}
 
+			const configuredVisibility = defaultStore.state.rememberNoteVisibility ? defaultStore.state.visibility : defaultStore.state.defaultNoteVisibility;
+			const localOnly = defaultStore.state.rememberNoteVisibility ? defaultStore.state.localOnly : defaultStore.state.defaultNoteLocalOnly;
+
 			os.api('notes/create', {
+				localOnly,
+				visibility: smallerVisibility(appearNote.visibility, configuredVisibility),
 				renoteId: appearNote.id,
 			}).then(() => {
 				os.toast(i18n.ts.renoted);
@@ -325,6 +341,7 @@ function reply(viaKeyboard = false): void {
 	pleaseLogin();
 	os.post({
 		reply: appearNote,
+		channel: appearNote.channel,
 		animation: !viaKeyboard,
 	}, () => {
 		focus();
@@ -742,6 +759,7 @@ function showReactions(): void {
 	padding: 16px;
 	border: dashed 1px var(--renote);
 	border-radius: 8px;
+	overflow: clip;
 }
 
 .channel {

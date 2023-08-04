@@ -15,8 +15,11 @@
 		<summary>{{ i18n.ts.poll }}</summary>
 		<MkPoll :note="note"/>
 	</details>
-	<button v-if="collapsed" :class="$style.fade" class="_button" @click="collapsed = false">
+	<button v-if="isLong && collapsed" :class="$style.fade" class="_button" @click="collapsed = false">
 		<span :class="$style.fadeLabel">{{ i18n.ts.showMore }}</span>
+	</button>
+	<button v-else-if="isLong && !collapsed" :class="$style.showLess" class="_button" @click="collapsed = true">
+		<span :class="$style.showLessLabel">{{ i18n.ts.showLess }}</span>
 	</button>
 </div>
 </template>
@@ -34,7 +37,9 @@ const props = defineProps<{
 	note: misskey.entities.Note;
 }>();
 
-const collapsed = $ref(shouldCollapsed(props.note));
+const isLong = shouldCollapsed(props.note);
+
+const collapsed = $ref(isLong);
 </script>
 
 <style lang="scss" module>
@@ -82,5 +87,21 @@ const collapsed = $ref(shouldCollapsed(props.note));
 	margin-left: 4px;
 	font-style: oblique;
 	color: var(--renote);
+}
+
+.showLess {
+	width: 100%;
+	margin-top: 14px;
+	position: sticky;
+	bottom: calc(var(--stickyBottom, 0px) + 14px);
+}
+
+.showLessLabel {
+	display: inline-block;
+	background: var(--popup);
+	padding: 6px 10px;
+	font-size: 0.8em;
+	border-radius: 999px;
+	box-shadow: 0 2px 6px rgb(0 0 0 / 20%);
 }
 </style>
