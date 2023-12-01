@@ -95,9 +95,6 @@ export class AntennaService implements OnApplicationShutdown {
 
 	@bindThis
 	public async checkHitAntenna(antenna: MiAntenna, note: (MiNote | Packed<'Note'>), noteUser: { id: MiUser['id']; username: string; host: string | null; }): Promise<boolean> {
-		if (note.visibility === 'specified') return false;
-		if (note.visibility === 'followers') return false;
-
 		if (antenna.localOnly && noteUser.host != null) return false;
 
 		if (!antenna.withReplies && note.replyId != null) return false;
