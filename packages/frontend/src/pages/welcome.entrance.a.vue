@@ -1,61 +1,67 @@
 <!--
-SPDX-FileCopyrightText: syuilo and other misskey contributors
+SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-	<div v-if="meta" class="rsqzvsbo">
-		<MkFeaturedPhotos class="bg" />
-		<div class="shape1"></div>
-		<div class="shape2"></div>
-		<img src="/client-assets/misskey.svg" class="misskey" />
-		<div class="emojis">
-			<MkEmoji :normal="true" :noStyle="true" emoji="👍" />
-			<MkEmoji :normal="true" :noStyle="true" emoji="❤" />
-			<MkEmoji :normal="true" :noStyle="true" emoji="😆" />
-			<MkEmoji :normal="true" :noStyle="true" emoji="🎉" />
-			<MkEmoji :normal="true" :noStyle="true" emoji="🍮" />
-		</div>
-		<div class="contents">
-			<MkVisitorDashboard />
-		</div>
-		<div v-if="instances && instances.length > 0" class="federation">
-			<MarqueeText :duration="40">
-				<MkA v-for="instance in instances" :key="instance.id" :class="$style.federationInstance" :to="`/instance-info/${instance.host}`" behavior="window">
-					<!--<MkInstanceCardMini :instance="instance"/>-->
-					<img v-if="instance.iconUrl" class="icon" :src="getInstanceIcon(instance)" alt="" />
-					<span class="name _monospace">{{ instance.host }}</span>
-				</MkA>
-			</MarqueeText>
-		</div>
+<div v-if="meta" class="rsqzvsbo">
+	<MkFeaturedPhotos class="bg"/>
+	<XTimeline class="tl"/>
+	<div class="shape1"></div>
+	<div class="shape2"></div>
+	<img :src="misskeysvg" class="misskey"/>
+	<div class="emojis">
+		<MkEmoji :normal="true" :noStyle="true" emoji="👍"/>
+		<MkEmoji :normal="true" :noStyle="true" emoji="❤"/>
+		<MkEmoji :normal="true" :noStyle="true" emoji="😆"/>
+		<MkEmoji :normal="true" :noStyle="true" emoji="🎉"/>
+		<MkEmoji :normal="true" :noStyle="true" emoji="🍮"/>
 	</div>
+	<div class="contents">
+		<MkVisitorDashboard/>
+	</div>
+	<div v-if="instances && instances.length > 0" class="federation">
+		<MarqueeText :duration="40">
+			<MkA v-for="instance in instances" :key="instance.id" :class="$style.federationInstance" :to="`/instance-info/${instance.host}`" behavior="window">
+				<!--<MkInstanceCardMini :instance="instance"/>-->
+				<img v-if="instance.iconUrl" class="icon" :src="getInstanceIcon(instance)" alt=""/>
+				<span class="name _monospace">{{ instance.host }}</span>
+			</MkA>
+		</MarqueeText>
+	</div>
+</div>
 </template>
 
 <script lang="ts" setup>
 import MkFeaturedPhotos from '@/components/MkFeaturedPhotos.vue';
 import MarqueeText from '@/components/MkMarquee.vue';
 import MkVisitorDashboard from '@/components/MkVisitorDashboard.vue';
-import * as os from '@/os.js';
 import { getProxiedImageUrl } from '@/scripts/media-proxy.js';
+import { misskeyApi, misskeyApiGet } from '@/scripts/misskey-api.js';
 import * as Misskey from 'misskey-js';
-import { } from 'vue';
+import { ref } from 'vue';
+import XTimeline from './welcome.timeline.vue';
+import misskeysvg from '/client-assets/misskey.svg';
 
-let meta = $ref<Misskey.entities.Instance>();
-let instances = $ref<any[]>();
+const meta = ref<Misskey.entities.MetaResponse>();
+const instances = ref<Misskey.entities.FederationInstance[]>();
 
-function getInstanceIcon(instance): string {
+function getInstanceIcon(instance: Misskey.entities.FederationInstance): string {
+	if (!instance.iconUrl) {
+		return '';
+	}
 	return getProxiedImageUrl(instance.iconUrl, 'preview');
 }
 
-os.api('meta', { detail: true }).then(_meta => {
-	meta = _meta;
+misskeyApi('meta', { detail: true }).then(_meta => {
+	meta.value = _meta;
 });
 
-os.apiGet('federation/instances', {
+misskeyApiGet('federation/instances', {
 	sort: '+pubSub',
 	limit: 20,
 }).then(_instances => {
-	instances = _instances;
+	instances.value = _instances;
 });
 </script>
 

@@ -1,33 +1,33 @@
 <!--
-SPDX-FileCopyrightText: syuilo and other misskey contributors
+SPDX-FileCopyrightText: syuilo and misskey-project
 SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-	<div v-if="meta" :class="$style.root">
-		<div :class="[$style.main, $style.panel]">
-			<img :src="instance.iconUrl || instance.faviconUrl || '/favicon.ico'" alt="" :class="$style.mainIcon" />
-			<button class="_button _acrylic" :class="$style.mainMenu" @click="showMenu"><i class="ti ti-dots"></i></button>
-			<div :class="$style.mainFg">
-				<h1 :class="$style.mainTitle">
-					<!-- 背景色によってはロゴが見えなくなるのでとりあえず無効に -->
-					<!-- <img class="logo" v-if="meta.logoImageUrl" :src="meta.logoImageUrl"><span v-else class="text">{{ instanceName }}</span> -->
-					<span>{{ instanceName }}</span>
-				</h1>
-				<div :class="$style.mainAbout">
-					<!-- eslint-disable-next-line vue/no-v-html -->
-					<div v-html="meta.description || i18n.ts.headlineMisskey"></div>
-				</div>
-				<div v-if="instance.disableRegistration" :class="$style.mainWarn">
-					<MkInfo warn>{{ i18n.ts.invitationRequiredToRegister }}</MkInfo>
-				</div>
-				<div class="_gaps_s" :class="$style.mainActions">
-					<MkButton :class="$style.mainAction" full rounded @click="exploreOtherServers()">{{ i18n.ts.exploreOtherServers }}</MkButton>
-					<MkButton :class="$style.mainAction" full rounded data-cy-signin @click="signin()">{{ i18n.ts.login }}</MkButton>
-				</div>
+<div v-if="meta" :class="$style.root">
+	<div :class="[$style.main, $style.panel]">
+		<img :src="instance.iconUrl || '/favicon.ico'" alt="" :class="$style.mainIcon"/>
+		<button class="_button _acrylic" :class="$style.mainMenu" @click="showMenu"><i class="ti ti-dots"></i></button>
+		<div :class="$style.mainFg">
+			<h1 :class="$style.mainTitle">
+				<!-- 背景色によってはロゴが見えなくなるのでとりあえず無効に -->
+				<!-- <img class="logo" v-if="meta.logoImageUrl" :src="meta.logoImageUrl"><span v-else class="text">{{ instanceName }}</span> -->
+				<span>{{ instanceName }}</span>
+			</h1>
+			<div :class="$style.mainAbout">
+				<!-- eslint-disable-next-line vue/no-v-html -->
+				<div v-html="meta.description || i18n.ts.headlineMisskey"></div>
+			</div>
+			<div v-if="instance.disableRegistration" :class="$style.mainWarn">
+				<MkInfo warn>{{ i18n.ts.invitationRequiredToRegister }}</MkInfo>
+			</div>
+			<div class="_gaps_s" :class="$style.mainActions">
+				<MkButton :class="$style.mainAction" full rounded @click="exploreOtherServers()">{{ i18n.ts.exploreOtherServers }}</MkButton>
+				<MkButton :class="$style.mainAction" full rounded data-cy-signin @click="signin()">{{ i18n.ts.login }}</MkButton>
 			</div>
 		</div>
 	</div>
+</div>
 </template>
 
 <script lang="ts" setup>
@@ -38,13 +38,14 @@ import { instanceName } from '@/config.js';
 import { i18n } from '@/i18n.js';
 import { instance } from '@/instance.js';
 import * as os from '@/os.js';
+import { misskeyApi } from '@/scripts/misskey-api.js';
 import * as Misskey from 'misskey-js';
-import { } from 'vue';
+import { ref } from 'vue';
 
-let meta = $ref<Misskey.entities.Instance>();
+const meta = ref<Misskey.entities.MetaResponse | null>(null);
 
-os.api('meta', { detail: true }).then(_meta => {
-	meta = _meta;
+misskeyApi('meta', { detail: true }).then(_meta => {
+	meta.value = _meta;
 });
 
 function signin() {
@@ -66,35 +67,35 @@ function showMenu(ev) {
 		action: () => {
 			os.pageWindow('/about-misskey');
 		},
-	}, null, (instance.impressumUrl) ? {
+	}, { type: 'divider' }, (instance.impressumUrl) ? {
 		text: i18n.ts.impressum,
 		icon: 'ti ti-file-invoice',
 		action: () => {
-			window.open(instance.impressumUrl, '_blank');
+			window.open(instance.impressumUrl!, '_blank', 'noopener');
 		},
 	} : undefined, (instance.tosUrl) ? {
 		text: i18n.ts.termsOfService,
 		icon: 'ti ti-notebook',
 		action: () => {
-			window.open(instance.tosUrl, '_blank');
+			window.open(instance.tosUrl!, '_blank', 'noopener');
 		},
 	} : undefined, (instance.privacyPolicyUrl) ? {
 		text: i18n.ts.privacyPolicy,
 		icon: 'ti ti-shield-lock',
 		action: () => {
-			window.open(instance.privacyPolicyUrl, '_blank');
+			window.open(instance.privacyPolicyUrl!, '_blank', 'noopener');
 		},
-	} : undefined, (!instance.impressumUrl && !instance.tosUrl && !instance.privacyPolicyUrl) ? undefined : null, {
+	} : undefined, (!instance.impressumUrl && !instance.tosUrl && !instance.privacyPolicyUrl) ? undefined : { type: 'divider' }, {
 		text: i18n.ts.help,
 		icon: 'ti ti-help-circle',
 		action: () => {
-			window.open('https://misskey-hub.net/help.md', '_blank');
+			window.open('https://misskey-hub.net/docs/for-users/', '_blank', 'noopener');
 		},
 	}], ev.currentTarget ?? ev.target);
 }
 
 function exploreOtherServers() {
-	window.open('https://join.misskey.page/instances', '_blank');
+	window.open('https://misskey-hub.net/servers/', '_blank', 'noopener');
 }
 </script>
 
