@@ -132,6 +132,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
+import { $i } from '@/account.js';
 import MkButton from '@/components/MkButton.vue';
 import MkInfo from '@/components/MkInfo.vue';
 import FormLink from '@/components/form/link.vue';
@@ -329,11 +330,11 @@ const thereIsTreasure = ref($i && !claimedAchievements.includes('foundTreasure')
 
 let easterEggReady = false;
 const easterEggEmojis = ref<{
-	id: string,
-	top: number,
-	left: number,
-	emoji: string
-}[]>([]);
+		id: string,
+		top: number,
+		left: number,
+		emoji: string
+	}[]>([]);
 const easterEggEngine = ref<{ stop: () => void } | null>(null);
 const containerEl = shallowRef<HTMLElement>();
 
@@ -388,142 +389,141 @@ definePageMetadata(() => ({
 }));
 </script>
 
-<style lang="scss" scoped>
-.znqjceqz {
-	>.about {
-		position: relative;
-		border-radius: var(--radius);
-
-		>.treasure {
-			position: absolute;
-			top: 60px;
-			left: 0;
-			right: 0;
-			margin: 0 auto;
-			width: min-content;
-
-			>.treasureImg {
-				width: 25px;
-				vertical-align: bottom;
-			}
-		}
-
-		>.container {
+	<style lang="scss" scoped>
+	.znqjceqz {
+		> .about {
 			position: relative;
-			text-align: center;
-			padding: 16px;
+			border-radius: var(--radius);
 
-			&.playing {
-
-				&,
-				* {
-					user-select: none;
-				}
-
-				* {
-					will-change: transform;
-				}
-
-				>.emoji {
-					visibility: visible;
-				}
-			}
-
-			>.icon {
-				display: block;
-				width: 80px;
-				margin: 0 auto;
-				border-radius: 16px;
-				position: relative;
-				z-index: 1;
-			}
-
-			>.misskey {
-				margin: 0.75em auto 0 auto;
-				width: max-content;
-				position: relative;
-				z-index: 1;
-			}
-
-			>.version {
-				margin: 0 auto;
-				width: max-content;
-				opacity: 0.5;
-				position: relative;
-				z-index: 1;
-			}
-
-			>.emoji {
+			> .treasure {
 				position: absolute;
-				z-index: 1;
-				top: 0;
+				top: 60px;
 				left: 0;
-				visibility: hidden;
+				right: 0;
+				margin: 0 auto;
+				width: min-content;
 
-				>.emoji {
-					pointer-events: none;
-					font-size: 24px;
-					width: 24px;
+				> .treasureImg {
+					width: 25px;
+					vertical-align: bottom;
+				}
+			}
+
+			> .container {
+				position: relative;
+				text-align: center;
+				padding: 16px;
+
+				&.playing {
+					&, * {
+						user-select: none;
+					}
+
+					* {
+						will-change: transform;
+					}
+
+					> .emoji {
+						visibility: visible;
+					}
+				}
+
+				> .icon {
+					display: block;
+					width: 80px;
+					margin: 0 auto;
+					border-radius: 16px;
+					position: relative;
+					z-index: 1;
+				}
+
+				> .misskey {
+					margin: 0.75em auto 0 auto;
+					width: max-content;
+					position: relative;
+					z-index: 1;
+				}
+
+				> .version {
+					margin: 0 auto;
+					width: max-content;
+					opacity: 0.5;
+					position: relative;
+					z-index: 1;
+				}
+
+				> .emoji {
+					position: absolute;
+					z-index: 1;
+					top: 0;
+					left: 0;
+					visibility: hidden;
+
+					> .emoji {
+						pointer-events: none;
+						font-size: 24px;
+						width: 24px;
+					}
 				}
 			}
 		}
 	}
-}
-</style>
+	</style>
 
-<style lang="scss" module>
-.contributors {
-	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-	grid-gap: 12px;
-}
-
-.contributor {
-	display: flex;
-	align-items: center;
-	padding: 12px;
-	background: var(--buttonBg);
-	border-radius: 6px;
-
-	&:hover {
-		text-decoration: none;
-		background: var(--buttonHoverBg);
+	<style lang="scss" module>
+	.contributors {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+		grid-gap: 12px;
 	}
 
-	&.active {
-		color: var(--accent);
-		background: var(--buttonHoverBg);
+	.contributor {
+		display: flex;
+		align-items: center;
+		padding: 12px;
+		background: var(--buttonBg);
+		border-radius: 6px;
+
+		&:hover {
+			text-decoration: none;
+			background: var(--buttonHoverBg);
+		}
+
+		&.active {
+			color: var(--accent);
+			background: var(--buttonHoverBg);
+		}
 	}
-}
 
-.contributorAvatar {
-	width: 30px;
-	border-radius: 100%;
-}
+	.contributorAvatar {
+		width: 30px;
+		border-radius: 100%;
+	}
 
-.contributorUsername {
-	margin-left: 12px;
-}
+	.contributorUsername {
+		margin-left: 12px;
+	}
 
-.patronsWithIcon {
-	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-	grid-gap: 12px;
-}
+	.patronsWithIcon {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+		grid-gap: 12px;
+	}
 
-.patronWithIcon {
-	display: flex;
-	align-items: center;
-	padding: 12px;
-	background: var(--buttonBg);
-	border-radius: 6px;
-}
+	.patronWithIcon {
+		display: flex;
+		align-items: center;
+		padding: 12px;
+		background: var(--buttonBg);
+		border-radius: 6px;
+	}
 
-.patronIcon {
-	width: 24px;
-	border-radius: 100%;
-}
+	.patronIcon {
+		width: 24px;
+		border-radius: 100%;
+	}
 
-.patronName {
-	margin-left: 12px;
-}</style>
+	.patronName {
+		margin-left: 12px;
+	}
+	</style>
