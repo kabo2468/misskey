@@ -8,12 +8,14 @@ import { DI } from '@/di-symbols.js';
 import { bindThis } from '@/decorators.js';
 import type { MiUser } from '@/models/User.js';
 import type { MiNote } from '@/models/Note.js';
+import type { MiMeta } from '@/models/Meta.js';
 import { Packed } from '@/misc/json-schema.js';
 import type { NotesRepository } from '@/models/_.js';
 import { NoteEntityService } from '@/core/entities/NoteEntityService.js';
 import { FanoutTimelineName, FanoutTimelineService } from '@/core/FanoutTimelineService.js';
+import { UtilityService } from '@/core/UtilityService.js';
 import { isUserRelated } from '@/misc/is-user-related.js';
-import { isPureRenote } from '@/misc/is-pure-renote.js';
+import { isQuote, isRenote } from '@/misc/is-renote.js';
 import { CacheService } from '@/core/CacheService.js';
 import { isReply } from '@/misc/is-reply.js';
 import { isInstanceMuted } from '@/misc/is-instance-muted.js';
@@ -30,9 +32,11 @@ type TimelineOptions = {
 	alwaysIncludeMyNotes?: boolean;
 	ignoreAuthorFromBlock?: boolean;
 	ignoreAuthorFromMute?: boolean;
+	ignoreAuthorFromInstanceBlock?: boolean;
 	excludeNoFiles?: boolean;
 	excludeReplies?: boolean;
 	excludePureRenotes: boolean;
+	ignoreAuthorFromUserSuspension?: boolean;
 	dbFallback: (untilId: string | null, sinceId: string | null, limit: number) => Promise<MiNote[]>,
 };
 
@@ -42,9 +46,13 @@ export class FanoutTimelineEndpointService {
 		@Inject(DI.notesRepository)
 		private notesRepository: NotesRepository,
 
+		@Inject(DI.meta)
+		private meta: MiMeta,
+
 		private noteEntityService: NoteEntityService,
 		private cacheService: CacheService,
 		private fanoutTimelineService: FanoutTimelineService,
+		private utilityService: UtilityService,
 	) {
 	}
 
@@ -54,25 +62,21 @@ export class FanoutTimelineEndpointService {
 	}
 
 	@bindThis
-	private async getMiNotes(ps: TimelineOptions): Promise<MiNote[]> {
-		let noteIds: string[];
-		let shouldFallbackToDb = false;
-
+	async getMiNotes(ps: TimelineOptions): Promise<MiNote[]> {
 		// 呼び出し元と以下の処理をシンプルにするためにdbFallbackを置き換える
 		if (!ps.useDbFallback) ps.dbFallback = () => Promise.resolve([]);
 
-		const shouldPrepend = ps.sinceId && !ps.untilId;
-		const idCompare: (a: string, b: string) => number = shouldPrepend ? (a, b) => a < b ? -1 : 1 : (a, b) => a > b ? -1 : 1;
+		const ascending = ps.sinceId && !ps.untilId;
+		const idCompare: (a: string, b: string) => number = ascending ? (a, b) => a < b ? -1 : 1 : (a, b) => a > b ? -1 : 1;
 
 		const redisResult = await this.fanoutTimelineService.getMulti(ps.redisTimelines, ps.untilId, ps.sinceId);
 
 		// TODO: いい感じにgetMulti内でソート済だからuniqするときにredisResultが全てソート済なのを利用して再ソートを避けたい
-		const redisResultIds = Array.from(new Set(redisResult.flat(1)));
+		const redisResultIds = Array.from(new Set(redisResult.flat(1))).sort(idCompare);
 
-		redisResultIds.sort(idCompare);
-		noteIds = redisResultIds.slice(0, ps.limit);
-
-		shouldFallbackToDb = shouldFallbackToDb || (noteIds.length === 0);
+		let noteIds = redisResultIds.slice(0, ps.limit);
+		const oldestNoteId = ascending ? redisResultIds[0] : redisResultIds[redisResultIds.length - 1];
+		const shouldFallbackToDb = noteIds.length === 0 || ps.sinceId != null && ps.sinceId < oldestNoteId;
 
 		if (!shouldFallbackToDb) {
 			let filter = ps.noteFilter ?? (_note => true);
@@ -95,7 +99,7 @@ export class FanoutTimelineEndpointService {
 
 			if (ps.excludePureRenotes) {
 				const parentFilter = filter;
-				filter = (note) => !isPureRenote(note) && parentFilter(note);
+				filter = (note) => (!isRenote(note) || isQuote(note)) && parentFilter(note);
 			}
 
 			if (ps.me) {
@@ -116,8 +120,40 @@ export class FanoutTimelineEndpointService {
 				filter = (note) => {
 					if (isUserRelated(note, userIdsWhoBlockingMe, ps.ignoreAuthorFromBlock)) return false;
 					if (isUserRelated(note, userIdsWhoMeMuting, ps.ignoreAuthorFromMute)) return false;
-					if (isPureRenote(note) && isUserRelated(note, userIdsWhoMeMutingRenotes, ps.ignoreAuthorFromMute)) return false;
+					if (isUserRelated(note.renote, userIdsWhoBlockingMe, ps.ignoreAuthorFromBlock)) return false;
+					if (isUserRelated(note.renote, userIdsWhoMeMuting, ps.ignoreAuthorFromMute)) return false;
+					if (!ps.ignoreAuthorFromMute && isRenote(note) && !isQuote(note) && userIdsWhoMeMutingRenotes.has(note.userId)) return false;
 					if (isInstanceMuted(note, userMutedInstances)) return false;
+
+					return parentFilter(note);
+				};
+			}
+
+			{
+				const parentFilter = filter;
+				filter = (note) => {
+					if (!ps.ignoreAuthorFromInstanceBlock) {
+						if (this.utilityService.isBlockedHost(this.meta.blockedHosts, note.userHost)) return false;
+					}
+					if (note.userId !== note.renoteUserId && this.utilityService.isBlockedHost(this.meta.blockedHosts, note.renoteUserHost)) return false;
+					if (note.userId !== note.replyUserId && this.utilityService.isBlockedHost(this.meta.blockedHosts, note.replyUserHost)) return false;
+
+					return parentFilter(note);
+				};
+			}
+
+			{
+				const parentFilter = filter;
+				filter = (note) => {
+					const noteJoined = note as MiNote & {
+						renoteUser: MiUser | null;
+						replyUser: MiUser | null;
+					};
+					if (!ps.ignoreAuthorFromUserSuspension) {
+						if (note.user!.isSuspended) return false;
+					}
+					if (note.userId !== note.renoteUserId && noteJoined.renoteUser?.isSuspended) return false;
+					if (note.userId !== note.replyUserId && noteJoined.replyUser?.isSuspended) return false;
 
 					return parentFilter(note);
 				};
@@ -142,9 +178,7 @@ export class FanoutTimelineEndpointService {
 
 				if (ps.allowPartial ? redisTimeline.length !== 0 : redisTimeline.length >= ps.limit) {
 					// 十分Redisからとれた
-					const result = redisTimeline.slice(0, ps.limit);
-					if (shouldPrepend) result.reverse();
-					return result;
+					return redisTimeline.slice(0, ps.limit);
 				}
 			}
 
@@ -152,8 +186,7 @@ export class FanoutTimelineEndpointService {
 			const remainingToRead = ps.limit - redisTimeline.length;
 			let dbUntil: string | null;
 			let dbSince: string | null;
-			if (shouldPrepend) {
-				redisTimeline.reverse();
+			if (ascending) {
 				dbUntil = ps.untilId;
 				dbSince = noteIds[noteIds.length - 1];
 			} else {
@@ -161,7 +194,7 @@ export class FanoutTimelineEndpointService {
 				dbSince = ps.sinceId;
 			}
 			const gotFromDb = await ps.dbFallback(dbUntil, dbSince, remainingToRead);
-			return shouldPrepend ? [...gotFromDb, ...redisTimeline] : [...redisTimeline, ...gotFromDb];
+			return [...redisTimeline, ...gotFromDb];
 		}
 
 		return await ps.dbFallback(ps.untilId, ps.sinceId, ps.limit);

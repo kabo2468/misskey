@@ -13,13 +13,14 @@ import * as fileType from 'file-type';
 import FFmpeg from 'fluent-ffmpeg';
 import isSvg from 'is-svg';
 import probeImageSize from 'probe-image-size';
-import { type predictionType } from 'nsfwjs';
-import sharp from 'sharp';
 import { sharpBmp } from '@misskey-dev/sharp-read-bmp';
-import { encode } from 'blurhash';
+import * as blurhash from 'blurhash';
 import { createTempDir } from '@/misc/create-temp.js';
 import { AiService } from '@/core/AiService.js';
+import { LoggerService } from '@/core/LoggerService.js';
+import type Logger from '@/logger.js';
 import { bindThis } from '@/decorators.js';
+import type { PredictionType } from 'nsfwjs';
 
 export type FileInfo = {
 	size: number;
@@ -49,9 +50,13 @@ const TYPE_SVG = {
 
 @Injectable()
 export class FileInfoService {
+	private logger: Logger;
+
 	constructor(
 		private aiService: AiService,
+		private loggerService: LoggerService,
 	) {
+		this.logger = this.loggerService.getLogger('file-info');
 	}
 
 	/**
@@ -59,6 +64,7 @@ export class FileInfoService {
 	 */
 	@bindThis
 	public async getFileInfo(path: string, opts: {
+		fileName?: string | null;
 		skipSensitiveDetection: boolean;
 		sensitiveThreshold?: number;
 		sensitiveThresholdForPorn?: number;
@@ -70,6 +76,26 @@ export class FileInfoService {
 		const md5 = await this.calcHash(path);
 
 		let type = await this.detectType(path);
+
+		if (type.mime === TYPE_OCTET_STREAM.mime && opts.fileName != null) {
+			const ext = opts.fileName.split('.').pop();
+			if (ext === 'txt') {
+				type = {
+					mime: 'text/plain',
+					ext: 'txt',
+				};
+			} else if (ext === 'csv') {
+				type = {
+					mime: 'text/csv',
+					ext: 'csv',
+				};
+			} else if (ext === 'json') {
+				type = {
+					mime: 'application/json',
+					ext: 'json',
+				};
+			}
+		}
 
 		// image dimensions
 		let width: number | undefined;
@@ -165,7 +191,7 @@ export class FileInfoService {
 		let sensitive = false;
 		let porn = false;
 
-		function judgePrediction(result: readonly predictionType[]): [sensitive: boolean, porn: boolean] {
+		function judgePrediction(result: readonly PredictionType[]): [sensitive: boolean, porn: boolean] {
 			let sensitive = false;
 			let porn = false;
 
@@ -263,7 +289,6 @@ export class FileInfoService {
 	private async *asyncIterateFrames(cwd: string, command: FFmpeg.FfmpegCommand): AsyncGenerator<string, void> {
 		const watcher = new FSWatcher({
 			cwd,
-			disableGlobbing: true,
 		});
 		let finished = false;
 		command.once('end', () => {
@@ -318,6 +343,34 @@ export class FileInfoService {
 	}
 
 	/**
+	 * ビデオファイルにビデオトラックがあるかどうかチェック
+	 * （ない場合：m4a, webmなど）
+	 *
+	 * @param path ファイルパス
+	 * @returns ビデオトラックがあるかどうか（エラー発生時は常に`true`を返す）
+	 */
+	@bindThis
+	private hasVideoTrackOnVideoFile(path: string): Promise<boolean> {
+		const sublogger = this.logger.createSubLogger('ffprobe');
+		sublogger.info(`Checking the video file. File path: ${path}`);
+		return new Promise((resolve) => {
+			try {
+				FFmpeg.ffprobe(path, (err, metadata) => {
+					if (err) {
+						sublogger.warn(`Could not check the video file. Returns true. File path: ${path}`, err);
+						resolve(true);
+						return;
+					}
+					resolve(metadata.streams.some((stream) => stream.codec_type === 'video'));
+				});
+			} catch (err) {
+				sublogger.warn(`Could not check the video file. Returns true. File path: ${path}`, err as Error);
+				resolve(true);
+			}
+		});
+	}
+
+	/**
 	 * Detect MIME Type and extension
 	 */
 	@bindThis
@@ -337,6 +390,20 @@ export class FileInfoService {
 		// XMLはSVGかもしれない
 			if (type.mime === 'application/xml' && await this.checkSvg(path)) {
 				return TYPE_SVG;
+			}
+
+			if ((type.mime.startsWith('video') || type.mime === 'application/ogg') && !(await this.hasVideoTrackOnVideoFile(path))) {
+				const newMime = `audio/${type.mime.split('/')[1]}`;
+				if (newMime === 'audio/mp4') {
+					return {
+						mime: 'audio/mp4',
+						ext: 'm4a',
+					};
+				}
+				return {
+					mime: newMime,
+					ext: type.ext,
+				};
 			}
 
 			return {
@@ -392,12 +459,12 @@ export class FileInfoService {
 	 */
 	@bindThis
 	private async detectImageSize(path: string): Promise<{
-	width: number;
-	height: number;
-	wUnits: string;
-	hUnits: string;
-	orientation?: number;
-}> {
+		width: number;
+		height: number;
+		wUnits: string;
+		hUnits: string;
+		orientation?: number;
+	}> {
 		const readable = fs.createReadStream(path);
 		const imageSize = await probeImageSize(readable);
 		readable.destroy();
@@ -405,7 +472,7 @@ export class FileInfoService {
 	}
 
 	/**
-	 * Calculate average color of image
+	 * Calculate blurhash string of image
 	 */
 	@bindThis
 	private getBlurhash(path: string, type: string): Promise<string> {
@@ -420,7 +487,7 @@ export class FileInfoService {
 					let hash;
 
 					try {
-						hash = encode(new Uint8ClampedArray(buffer), info.width, info.height, 5, 5);
+						hash = blurhash.encode(new Uint8ClampedArray(buffer), info.width, info.height, 5, 5);
 					} catch (e) {
 						return reject(e);
 					}
