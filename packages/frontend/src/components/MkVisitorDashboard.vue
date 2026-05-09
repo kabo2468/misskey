@@ -12,7 +12,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<h1 :class="$style.mainTitle">
 				<!-- 背景色によってはロゴが見えなくなるのでとりあえず無効に -->
 				<!-- <img class="logo" v-if="instance.logoImageUrl" :src="instance.logoImageUrl"><span v-else class="text">{{ instanceName }}</span> -->
-				<span>{{ instanceName }}</span>
+				<MkA to="/">{{ instanceName }}</MkA>
 			</h1>
 			<div :class="$style.mainAbout">
 				<!-- eslint-disable-next-line vue/no-v-html -->
@@ -24,10 +24,29 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<MkInfo v-else-if="instance.federation === 'none'" warn>{{ i18n.ts.federationDisabled }}</MkInfo>
 			</div>
 			<div class="_gaps_s" :class="$style.mainActions">
-				<MkButton :class="$style.mainAction" full rounded link to="https://misskey-hub.net/servers/">{{ i18n.ts.exploreOtherServers }}</MkButton>
+				<MkButton :class="$style.mainAction" full rounded type="a" target="_blank" rel="noopener" href="https://misskey-hub.net/servers/">{{ i18n.ts.exploreOtherServers }}</MkButton>
 				<MkButton :class="$style.mainAction" full rounded data-cy-signin @click="signin()">{{ i18n.ts.login }}</MkButton>
 			</div>
 		</div>
+	</div>
+	<div v-if="stats && instance.clientOptions.showActivitiesForVisitor !== false" :class="$style.stats">
+		<div :class="[$style.statsItem, $style.panel]">
+			<div :class="$style.statsItemLabel">{{ i18n.ts.users }}</div>
+			<div :class="$style.statsItemCount"><MkNumber :value="stats.originalUsersCount"/></div>
+		</div>
+		<div :class="[$style.statsItem, $style.panel]">
+			<div :class="$style.statsItemLabel">{{ i18n.ts.notes }}</div>
+			<div :class="$style.statsItemCount"><MkNumber :value="stats.originalNotesCount"/></div>
+		</div>
+	</div>
+	<div v-if="instance.policies.ltlAvailable && instance.clientOptions.showTimelineForVisitor !== false" :class="[$style.tl, $style.panel]">
+		<div :class="$style.tlHeader">{{ i18n.ts.letsLookAtTimeline }}</div>
+		<div :class="$style.tlBody">
+			<MkStreamingNotesTimeline src="local"/>
+		</div>
+	</div>
+	<div v-if="instance.clientOptions.showActivitiesForVisitor !== false" :class="$style.panel">
+		<XActiveUsersChart/>
 	</div>
 </div>
 </template>
@@ -35,10 +54,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 <script lang="ts" setup>
 import { ref } from 'vue';
 import * as Misskey from 'misskey-js';
+import { instanceName } from '@@/js/config.js';
+import type { MenuItem } from '@/types/menu.js';
 import XSigninDialog from '@/components/MkSigninDialog.vue';
 import MkButton from '@/components/MkButton.vue';
 import MkInfo from '@/components/MkInfo.vue';
-import { instanceName } from '@@/js/config.js';
 import * as os from '@/os.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { i18n } from '@/i18n.js';
@@ -47,9 +67,11 @@ import { openInstanceMenu } from '@/ui/_common_/common.js';
 
 const stats = ref<Misskey.entities.StatsResponse | null>(null);
 
-misskeyApi('stats', {}).then((res) => {
-	stats.value = res;
-});
+if (instance.clientOptions.showActivitiesForVisitor !== false) {
+	misskeyApi('stats', {}).then((res) => {
+		stats.value = res;
+	});
+}
 
 function signin() {
 	const { dispose } = os.popup(XSigninDialog, {
@@ -59,7 +81,7 @@ function signin() {
 	});
 }
 
-function showMenu(ev: MouseEvent) {
+function showMenu(ev: PointerEvent) {
 	openInstanceMenu(ev);
 }
 </script>
